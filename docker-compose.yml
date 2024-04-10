@@ -1,0 +1,22 @@
+#####################################################
+# Change to docker-compose.prod.yml and change any variables to your local ones
+# Than run docker-compose up --build in the same directory as this file
+
+version: '3.8'
+
+services:
+  project_planner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DISPLAY=unix${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./files:/src/files
+    network_mode: host
+
+
+
+
+
