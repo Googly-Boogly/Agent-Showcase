@@ -1,0 +1,32 @@
+# Start from the same base image
+FROM python:3.11-slim-bookworm
+
+# Keep the environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# System dependencies remain the same; they include everything required for your application and tests
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends gcc libpq-dev build-essential \
+  && apt-get install -y ffmpeg \
+  && apt-get install -y --no-install-recommends libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+# Assuming you have a separate requirements file for testing, or you can reuse the existing one
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
+
+# You might have test-specific Python dependencies; if so, include them here
+# RUN pip3 install --no-cache-dir unittest
+
+# Copy your application code & tests into the container
+COPY ./src /src
+
+
+# Set the entry point to run your tests
+# Adjust this command based on how you run your tests (e.g., pytest, unittest)
+CMD ["python3", "-m", "unittest", "discover", "-s", "tests"]

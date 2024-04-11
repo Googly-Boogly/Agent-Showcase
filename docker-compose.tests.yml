@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  test_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      - DISPLAY=unix${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./files:/src/files
+    network_mode: host

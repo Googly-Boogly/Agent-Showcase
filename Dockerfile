@@ -27,4 +27,4 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
 COPY ./src /src
 
 # Use the startup script as the entry point
-CMD ["python3", "main.py"]
+CMD ["python3", "idk_some_code/main.py"]
