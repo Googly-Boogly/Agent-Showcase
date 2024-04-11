@@ -1,10 +1,17 @@
 # main.py
-from idk_some_code.drone import Drone
 import numpy as np
-from idk_some_code.grid import Grid
 from typing import List, Tuple
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+
+try:
+    from idk_some_code.drone import Drone
+except ImportError:
+    from drone import Drone
+try:
+    from idk_some_code.grid import Grid
+except ImportError:
+    from grid import Grid
 
 
 def initialize_victims(grid: Grid, num_victims: int) -> None:
@@ -36,72 +43,95 @@ def simulate_disaster_response(grid_size: Tuple[int, int], num_drones: int, num_
         # Optional: Add a call to a visualization function here to see the grid state
 
 
-def main():
-    grid_size = (100, 100)
-    num_drones = 4
+def initialize_simulation(grid_size, num_drones, num_mountains, num_buildings):
+    """Set up the grid, drones, and obstacles."""
     grid = Grid(*grid_size)
-
-    # Assuming functions to initialize mountains, safe zones, and possibly victims are available
-    initialize_obstacles(grid, num_mountains=10, num_buildings=10)  # Placeholder function
-
-    start_position = (grid.width // 2, grid.height // 2)  # Calculate grid center
+    initialize_obstacles(grid, num_mountains, num_buildings)
+    start_position = (grid.width // 2, grid.height // 2)
     drones = [Drone(grid, start_position) for _ in range(num_drones)]
+    return grid, drones
 
+
+def setup_visualization(grid, grid_size, drones):
+    """Prepare the matplotlib figure for the simulation."""
     fig, ax = plt.subplots()
     ax.set_xlim(0, grid_size[0])
     ax.set_ylim(0, grid_size[1])
     ax.set_facecolor('black')
 
-    # Plot mountains and safe zones
-    mountain_positions = np.array(grid.get_mountain_positions())  # Placeholder method
+    # Plotting mountains
+    mountain_positions = np.array(grid.get_mountain_positions())
     if mountain_positions.size > 0:
         ax.scatter(mountain_positions[:, 0], mountain_positions[:, 1], s=100, color='brown', label='Mountains', zorder=1)
 
+    # Plotting drones
     drone_positions = np.array([drone.position for drone in drones])
     drone_scatter = ax.scatter(drone_positions[:, 0], drone_positions[:, 1], s=100, color='red', label='Drones', zorder=3)
 
-    # Initialize safe zone visualization
-    safe_zone_positions = np.array(grid.get_safe_zone_positions())
-    if safe_zone_positions.size > 0:
-        safe_zone_scatter = ax.scatter(safe_zone_positions[:, 0], safe_zone_positions[:, 1], s=100, color='green',
-                                       label='Safe Zones', zorder=2)
+    # Initializing placeholders for safe zones, "Need Help", and "Area Cleared" pheromones
+    safe_zone_scatter = ax.scatter([], [], s=100, color='green', label='Safe Zones', zorder=2)
+    need_help_scatter = ax.scatter([], [], s=50, color='cyan', label='"Need Help" Pheromones', zorder=2)
+    area_cleared_scatter = ax.scatter([], [], s=50, color='pink', label='"Area Cleared" Pheromones', zorder=2)
+
+    ax.legend()
+
+    return fig, ax, drone_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter
+
+
+def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, need_help_scatter,
+                         area_cleared_scatter):
+    """Update function for the animation, refreshing drone positions, safe zones, and pheromones."""
+
+    # Simulate drone actions and update positions
+    for drone in drones:
+        drone.assess_and_act(frame)  # Assuming this method updates the drone's position
+
+    # Update drone positions on the plot
+    drone_positions = np.array([drone.position for drone in drones])
+    drone_scatter.set_offsets(drone_positions)
+
+    # Update visualization for "Need Help" pheromones (similarly update for "Area Cleared" and other pheromones)
+    need_help_positions = np.array([
+        (x, y) for y in range(grid.height) for x in range(grid.width)
+        if any(pheromone['type'] == 'need_help' for pheromone in grid.get_pheromones(x, y))
+    ])
+    if need_help_positions.size > 0:
+        need_help_scatter.set_offsets(need_help_positions)
     else:
-        safe_zone_scatter = ax.scatter([], [], s=100, color='green', label='Safe Zones', zorder=2)
+        need_help_scatter.set_offsets(np.empty((0, 2)))
 
-    drone_legend = plt.Line2D([0], [0], linestyle="none", c="red", marker='o')
-    mountain_legend = plt.Line2D([0], [0], linestyle="none", c="brown", marker='o')
-    safe_zone_legend = plt.Line2D([0], [0], linestyle="none", c="green", marker='o')
-    ax.legend([drone_legend, mountain_legend, safe_zone_legend], ["Drones", "Mountains", "Safe Zones"], numpoints=1)
+    # Similarly update for "Area Cleared" pheromones...
+    area_cleared_positions = np.array([
+        (x, y) for y in range(grid.height) for x in range(grid.width)
+        if any(pheromone['type'] == 'area_cleared' for pheromone in grid.get_pheromones(x, y))
+    ])
+    if area_cleared_positions.size > 0:
+        area_cleared_scatter.set_offsets(area_cleared_positions)
+    else:
+        area_cleared_scatter.set_offsets(np.empty((0, 2)))
 
-    def update(frame):
-        # Update drone positions based on their logic
-        for drone in drones:
-            drone.assess_and_act(frame)  # Now correctly passing the current time
+    # Don't forget to refresh or update other elements like safe zones if they change over time
 
-        # Update drone positions on the plot
-        drone_positions = np.array([drone.position for drone in drones])
-        drone_scatter.set_offsets(drone_positions)
+    return drone_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter
 
-        # Fetch and update safe zone positions
-        safe_zone_positions = np.array(grid.get_safe_zone_positions())
-        if len(safe_zone_positions) > 0:
-            safe_zone_scatter.set_offsets(safe_zone_positions)
-        else:
-            # Handle case where there are no safe zones or safe_zone_scatter is not set up correctly
-            print("No safe zones to display or scatter not initialized.")
 
-        return drone_scatter, safe_zone_scatter,
+def main():
+    grid_size = (100, 100)
+    num_drones = 4
+    num_mountains = 10
+    num_buildings = 10
 
-    ani = FuncAnimation(fig, update, frames=np.arange(100), blit=True)
+    grid, drones = initialize_simulation(grid_size, num_drones, num_mountains, num_buildings)
+    fig, ax, drone_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter = setup_visualization(grid,
+                                                                                                             grid_size,
+                                                                                                             drones)
 
-    # Save the animation
+    ani = FuncAnimation(fig, update_visualization,
+                        fargs=(grid, drones, drone_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter),
+                        frames=np.arange(100), blit=True)
+
     ani.save('files/animation.mp4', writer='ffmpeg', fps=30)
-
-    total_explored_area = grid.explored_cells
-    total_time_spent = sum(drone.time_spent for drone in drones)
-
-    print(f"Total area explored: {total_explored_area} cells")
-    print(f"Total time spent by all drones: {total_time_spent} units")
+    print("Simulation complete and saved.")
 
 
 def refined_static_victim_visualization_test():

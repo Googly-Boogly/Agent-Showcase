@@ -1,8 +1,11 @@
 # drone.py
 import numpy as np
+from typing import Tuple, Dict
 
-from idk_some_code.grid import Grid
-from typing import Tuple
+try:
+    from idk_some_code.grid import Grid
+except ImportError:
+    from grid import Grid
 
 
 class Drone:
@@ -12,6 +15,20 @@ class Drone:
         self.time_spent = 0
         self.victim_counter = 0
         self.move_counter_since_last_victim = 0
+        self.drone_state: Dict[str, any] = {
+            "position": start_pos,
+            "perceptions": {
+                "N": None,
+                "S": None,
+                "E": None,
+                "W": None,
+                "NE": None,
+                "NW": None,
+                "SE": None,
+                "SW": None,
+            },
+            # Add more state components as needed, e.g., battery level
+        }
 
     def explore_current_cell(self, current_time: int) -> None:
         """Explores the current cell, adjusting time spent based on obstacles, marks it as a safe zone, and manages pheromone emission."""
@@ -69,12 +86,16 @@ class Drone:
         """Moves the drone in the specified direction, if possible."""
         if direction == "up" and self.can_move("up"):
             self.position = (self.position[0], self.position[1] - 1)
+            self.update_state()
         elif direction == "down" and self.can_move("down"):
             self.position = (self.position[0], self.position[1] + 1)
+            self.update_state()
         elif direction == "left" and self.can_move("left"):
             self.position = (self.position[0] - 1, self.position[1])
+            self.update_state()
         elif direction == "right" and self.can_move("right"):
             self.position = (self.position[0] + 1, self.position[1])
+            self.update_state()
         else:
             # Let's humorously acknowledge an unsuccessful move
             print("This drone attempted a dance move it hasn't quite mastered yet.")
@@ -105,4 +126,13 @@ class Drone:
             # Reset counters after emitting 'Need Help' pheromone
             self.victim_counter = 0
             self.move_counter_since_last_victim = 0
+
+    def update_state(self) -> None:
+        """Updates the drone's state based on its surroundings and pheromones within its visibility range."""
+        x, y = self.position
+        self.drone_state["position"] = (x, y)
+
+        # Use the new get_pheromones_square method to update perceptions based on the current position
+        visibility_range = 5  # Define as needed
+        self.drone_state["perceptions"] = self.grid.get_pheromones_square(self.position, visibility_range)
 

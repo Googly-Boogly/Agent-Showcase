@@ -148,3 +148,50 @@ class Grid:
                     if any(pheromone['type'] == 'trail' for pheromone in self.pheromones[ny][nx]):
                         return True
         return False
+
+    def get_pheromones_square(self, center: Tuple[int, int], visibility: int = 5) -> Dict[str, any]:
+        """
+        Returns all pheromones within a square visibility area centered around a given position.
+
+        :param center: The (x, y) coordinates of the drone.
+        :param visibility: The visibility range of the drone (defines the square area).
+        :return: A dictionary categorizing the pheromones based on relative direction.
+        """
+        x_center, y_center = center
+        pheromones_info = {
+            "N": [], "S": [], "E": [], "W": [],
+            "NE": [], "NW": [], "SE": [], "SW": []
+        }
+
+        for y in range(y_center - visibility, y_center + visibility + 1):
+            for x in range(x_center - visibility, x_center + visibility + 1):
+                if 0 <= x < self.width and 0 <= y < self.height:
+                    pheromones = self.get_pheromones(x, y)
+                    if pheromones:
+                        direction = self._get_relative_direction(x_center, y_center, x, y)
+                        pheromones_info[direction].extend(pheromones)
+        return pheromones_info
+
+    def _get_relative_direction(self, x_center: int, y_center: int, x: int, y: int) -> str:
+        """
+        Determines the relative direction of a point (x, y) from the center (x_center, y_center).
+        """
+        if y < y_center:
+            if x < x_center:
+                return "NW"
+            elif x > x_center:
+                return "NE"
+            else:
+                return "N"
+        elif y > y_center:
+            if x < x_center:
+                return "SW"
+            elif x > x_center:
+                return "SE"
+            else:
+                return "S"
+        else:  # y == y_center
+            if x < x_center:
+                return "W"
+            else:
+                return "E"

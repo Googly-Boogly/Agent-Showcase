@@ -117,5 +117,33 @@ class TestGrid(unittest.TestCase):
         self.assertFalse(self.grid.is_obstacle(2, 2), "Grid is clinging to its mountain for dear life.")
     # Feel free to expand with additional tests for corner cases and complex scenarios
 
+    def test_get_pheromones_square(self):
+        # Setup
+        grid_size = (20, 20)  # Example grid size
+        grid = Grid(*grid_size)
+        drone_position = (10, 10)  # Drone's position for this test
+        visibility = 5  # Visibility range
+
+        # Add some pheromones in different directions relative to the drone_position
+        # Adding pheromones at (9, 9) NW, (11, 9) NE, (9, 11) SW, (11, 11) SE
+        grid.add_pheromone(9, 9, "trail", "NW Trail", 1)
+        grid.add_pheromone(11, 9, "trail", "NE Trail", 1)
+        grid.add_pheromone(9, 11, "victim_found", "SW Victim", 1, intensity=2.0)
+        grid.add_pheromone(11, 11, "area_cleared", "SE Cleared", 1)
+
+        # Call the method under test
+        pheromones_square = grid.get_pheromones_square(drone_position, visibility)
+
+        # Assertions
+        self.assertEqual(len(pheromones_square["NW"]), 1, "Should find 1 pheromone in NW")
+        self.assertEqual(len(pheromones_square["NE"]), 1, "Should find 1 pheromone in NE")
+        self.assertEqual(len(pheromones_square["SW"]), 1, "Should find 1 pheromone in SW")
+        self.assertEqual(len(pheromones_square["SE"]), 1, "Should find 1 pheromone in SE")
+        self.assertEqual(pheromones_square["NW"][0]["message"], "NW Trail")
+        self.assertEqual(pheromones_square["NE"][0]["message"], "NE Trail")
+        self.assertEqual(pheromones_square["SW"][0]["message"], "SW Victim")
+        self.assertEqual(pheromones_square["SE"][0]["message"], "SE Cleared")
+
+
 if __name__ == "__main__":
     unittest.main()
