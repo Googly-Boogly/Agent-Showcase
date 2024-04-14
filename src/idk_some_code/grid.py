@@ -20,6 +20,7 @@ class Grid:
 
     def add_victim(self, x: int, y: int) -> None:
         self.grid[y][x] = 2
+        # print(f"Added victim at ({x}, {y}) - Grid value: {self.grid[y][x]}")
 
     def add_safe_zone(self, x: int, y: int) -> None:
         self.explored_cells += 1
@@ -31,7 +32,9 @@ class Grid:
         return False
 
     def is_victim(self, x: int, y: int) -> bool:
-        return self.grid[y][x] == 2
+        is_vic = self.grid[y][x] == 2
+        # print(f"Checking for victim at ({x}, {y}): {'Yes' if is_vic else 'No'} - Grid value: {self.grid[y][x]}")
+        return is_vic
 
     def is_safe_zone(self, x: int, y: int) -> bool:
         return self.grid[y][x] == 3
@@ -43,7 +46,8 @@ class Grid:
     def remove_victim(self, x: int, y: int) -> None:
         """Mark a cell as no longer containing a victim."""
         if self.is_victim(x, y):
-            self.grid[y][x] = 0
+            self.grid[y][x] = 3  # Assuming 3 is the safe zone code
+            # print(f"Victim removed at ({x}, {y}), grid updated to safe zone.")
 
     def add_pheromone(self, x: int, y: int, pheromone_type: str, message: str, timestamp: int,
                       intensity: float = 1.0) -> None:
@@ -152,7 +156,7 @@ class Grid:
     def get_pheromones_square(self, center: Tuple[int, int], visibility: int = 5) -> Dict[str, any]:
         """
         Returns all pheromones within a square visibility area centered around a given position.
-
+        This is where agent will get all information about surrounding pheromones.
         :param center: The (x, y) coordinates of the drone.
         :param visibility: The visibility range of the drone (defines the square area).
         :return: A dictionary categorizing the pheromones based on relative direction.

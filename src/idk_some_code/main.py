@@ -66,12 +66,12 @@ def setup_visualization(grid, grid_size, drones):
 
     # Plotting drones
     drone_positions = np.array([drone.position for drone in drones])
-    drone_scatter = ax.scatter(drone_positions[:, 0], drone_positions[:, 1], s=100, color='red', label='Drones', zorder=3)
+    drone_scatter = ax.scatter(drone_positions[:, 0], drone_positions[:, 1], s=100, color='red', label='Drones', zorder=4)
 
     # Initializing placeholders for safe zones, "Need Help", and "Area Cleared" pheromones
     safe_zone_scatter = ax.scatter([], [], s=100, color='green', label='Safe Zones', zorder=2)
-    need_help_scatter = ax.scatter([], [], s=50, color='cyan', label='"Need Help" Pheromones', zorder=2)
-    area_cleared_scatter = ax.scatter([], [], s=50, color='pink', label='"Area Cleared" Pheromones', zorder=2)
+    need_help_scatter = ax.scatter([], [], s=50, color='cyan', label='"Need Help" Pheromones', zorder=3)
+    area_cleared_scatter = ax.scatter([], [], s=50, color='pink', label='"Area Cleared" Pheromones', zorder=3)
 
     ax.legend()
 
@@ -90,12 +90,16 @@ def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, 
     drone_positions = np.array([drone.position for drone in drones])
     drone_scatter.set_offsets(drone_positions)
 
+    safe_zone_positions = np.array(grid.get_safe_zone_positions())
+    safe_zone_scatter.set_offsets(safe_zone_positions)
     # Update visualization for "Need Help" pheromones (similarly update for "Area Cleared" and other pheromones)
     need_help_positions = np.array([
         (x, y) for y in range(grid.height) for x in range(grid.width)
         if any(pheromone['type'] == 'need_help' for pheromone in grid.get_pheromones(x, y))
     ])
     if need_help_positions.size > 0:
+        # Need help pheromone emitted
+        # print('hello')
         need_help_scatter.set_offsets(need_help_positions)
     else:
         need_help_scatter.set_offsets(np.empty((0, 2)))
@@ -106,6 +110,7 @@ def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, 
         if any(pheromone['type'] == 'area_cleared' for pheromone in grid.get_pheromones(x, y))
     ])
     if area_cleared_positions.size > 0:
+        # print("area cleared pheromone emitted at: ", area_cleared_positions, "at time: ", frame)
         area_cleared_scatter.set_offsets(area_cleared_positions)
     else:
         area_cleared_scatter.set_offsets(np.empty((0, 2)))
@@ -120,15 +125,17 @@ def main():
     num_drones = 4
     num_mountains = 10
     num_buildings = 10
-
+    num_victims = 9000
     grid, drones = initialize_simulation(grid_size, num_drones, num_mountains, num_buildings)
+
+    initialize_victims(grid, num_victims)
     fig, ax, drone_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter = setup_visualization(grid,
                                                                                                              grid_size,
                                                                                                              drones)
 
     ani = FuncAnimation(fig, update_visualization,
                         fargs=(grid, drones, drone_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter),
-                        frames=np.arange(100), blit=True)
+                        frames=np.arange(300), blit=True)
 
     ani.save('files/animation.mp4', writer='ffmpeg', fps=30)
     print("Simulation complete and saved.")
