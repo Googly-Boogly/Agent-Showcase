@@ -1,9 +1,21 @@
 # main.py
+import sys
+sys.path.append('/src')
+
+import os
+
 import numpy as np
 from typing import List, Tuple
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from crewai import Agent, Task, Crew, Process
+from langchain_anthropic import ChatAnthropic
+try:
+    from global_code.singleton import State
+except ImportError:
+    from src.global_code.singleton import State
 
+os.environ["ANTHROPIC_API_KEY"] = State.config["ANTHROPIC_API_KEY"]
 try:
     from idk_some_code.drone import Drone
 except ImportError:
@@ -123,9 +135,9 @@ def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, 
 def main():
     grid_size = (100, 100)
     num_drones = 4
-    num_mountains = 10
-    num_buildings = 10
-    num_victims = 9000
+    num_mountains = 50
+    num_buildings = 500
+    num_victims = 300
     grid, drones = initialize_simulation(grid_size, num_drones, num_mountains, num_buildings)
 
     initialize_victims(grid, num_victims)
@@ -188,4 +200,28 @@ def initialize_obstacles(grid: Grid, num_mountains: int, num_buildings: int) -> 
 
 
 if __name__ == "__main__":
+    # ClaudeHaiku = ChatAnthropic(model="claude-3-haiku-20240307")
+    # drone_agent = Agent(
+    #     role='Drone in a disaster recovery mission',
+    #     goal='Decide the best action based on the current situation',
+    #     backstory=f"""
+    # You are a world-renowned drone pilot expert deployed in a disaster-struck area to assist in search and rescue operations. Your primary goal is to locate and assist victims while ensuring the area's safety. You can communicate with other drones using pheromones to coordinate efforts.
+    # """,
+    #     verbose=True,
+    #     allow_delegation=False,
+    #     tools=[],
+    #     llm=ClaudeHaiku
+    # )
+    # drone_task = Task(
+    #     description="""Decide the best action based on the current situation""",
+    #     expected_output="Either emit a pheromone and move or just move",
+    #     agent=drone_agent
+    # )
+    # crew = Crew(
+    #     agents=[drone_agent],
+    #     tasks=[drone_task],
+    #     verbose=2,  # You can set it to 1 or 2 to different logging levels
+    # )
+    # result = crew.kickoff()
+    # print(result)
     main()

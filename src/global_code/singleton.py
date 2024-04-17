@@ -9,7 +9,7 @@ class State:
     """
 
     config: dict = load_config()
-    client = OpenAI(api_key=config['OPENAI']['API_KEY'])
+    # client = OpenAI(api_key=config['OPENAI']['API_KEY'])
     # os.environ['OPENAI_API_KEY'] = config['OPENAI']['API_KEY']
     # os.environ['REPLICATE_API_KEY'] = config['REPLICATE_API_KEY']
     #
