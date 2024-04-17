@@ -1,4 +1,5 @@
 # main.py
+import random
 import sys
 sys.path.append('/src')
 
@@ -45,9 +46,7 @@ def simulate_disaster_response(grid_size: Tuple[int, int], num_drones: int, num_
     for current_time in range(simulation_time):
         for drone in drones:
             # Example simple behavior: Move randomly, then assess and act.
-            direction = np.random.choice(["up", "down", "left", "right"])
-            drone.move(direction)
-            drone.assess_and_act(current_time)
+            drone.agent_main()  # Call the agent_main function to decide and act
 
             # Example of aging pheromones at a fixed rate, assuming a decay rate of 100 time units
             grid.age_pheromones(current_time, 100)
@@ -55,12 +54,34 @@ def simulate_disaster_response(grid_size: Tuple[int, int], num_drones: int, num_
         # Optional: Add a call to a visualization function here to see the grid state
 
 
-def initialize_simulation(grid_size, num_drones, num_mountains, num_buildings):
-    """Set up the grid, drones, and obstacles."""
+def generate_start_positions(center: Tuple[int, int], num_positions: int, spread: int) -> List[Tuple[int, int]]:
+    """
+    Generate random start positions within a given spread around a center.
+    :param center: Central starting position (x, y)
+    :param num_positions: Number of positions to generate
+    :param spread: The size of the area around the center to generate positions
+    :return: List of start positions
+    """
+    x_center, y_center = center
+    return [
+        (random.randint(x_center - spread, x_center + spread), random.randint(y_center - spread, y_center + spread))
+        for _ in range(num_positions)
+    ]
+
+def initialize_simulation(grid_size: Tuple[int, int], num_drones: int, num_mountains: int, num_buildings: int) -> Tuple[Grid, List[Drone]]:
+    """
+    Set up the grid, drones, and obstacles.
+    :param grid_size: Size of the grid (width, height)
+    :param num_drones: Number of drones to initialize
+    :param num_mountains: Number of mountains to place
+    :param num_buildings: Number of buildings to place
+    :return: Tuple containing the grid and list of drones
+    """
     grid = Grid(*grid_size)
     initialize_obstacles(grid, num_mountains, num_buildings)
     start_position = (grid.width // 2, grid.height // 2)
-    drones = [Drone(grid, start_position) for _ in range(num_drones)]
+    drone_positions = generate_start_positions(start_position, num_drones, 2)  # Spread of 2 allows for a 5x5 area
+    drones = [Drone(grid, position) for position in drone_positions]
     return grid, drones
 
 
@@ -96,14 +117,19 @@ def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, 
 
     # Simulate drone actions and update positions
     for drone in drones:
-        drone.assess_and_act(frame)  # Assuming this method updates the drone's position
+        # drone.assess_and_act(frame)  # Assuming this method updates the drone's position
+        drone.agent_main()
 
     # Update drone positions on the plot
     drone_positions = np.array([drone.position for drone in drones])
     drone_scatter.set_offsets(drone_positions)
 
+    # Update safe zones
     safe_zone_positions = np.array(grid.get_safe_zone_positions())
-    safe_zone_scatter.set_offsets(safe_zone_positions)
+    if safe_zone_positions.size > 0:
+        safe_zone_scatter.set_offsets(safe_zone_positions)
+    else:
+        safe_zone_scatter.set_offsets(np.empty((0, 2)))
     # Update visualization for "Need Help" pheromones (similarly update for "Area Cleared" and other pheromones)
     need_help_positions = np.array([
         (x, y) for y in range(grid.height) for x in range(grid.width)
