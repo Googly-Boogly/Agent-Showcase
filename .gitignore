@@ -1,5 +1,6 @@
 # Custom stuff
 .venv
+/.venv
 #.env
 docker-compose.prod.yml
 docker-compose.prod.websitebuilder.yml
