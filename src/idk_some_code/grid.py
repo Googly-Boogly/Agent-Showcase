@@ -110,6 +110,12 @@ class Grid:
         return [(x, y) for y in range(self.height) for x in range(self.width) if
                 self.obstacles[y][x] and self.obstacles[y][x]['type'] == 'mountain']
 
+    def get_collapsed_building_positions(self) -> List[Tuple[int, int]]:
+        """Returns a list of coordinates for all unexplored collapsed buildings."""
+        return [(x, y) for y in range(self.height) for x in range(self.width) if
+                self.obstacles[y][x] and self.obstacles[y][x]['type'] == 'collapsed_building'
+                and not self.obstacles[y][x].get('explored', False)]
+
     def explore_cell(self, x: int, y: int) -> int:
         """Returns the time taken to explore a cell, considering various obstacles."""
         obstacle = self.obstacles[y][x]
