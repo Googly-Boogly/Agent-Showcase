@@ -79,6 +79,7 @@ Output: `files/animation.mp4` (30 fps via FFmpeg)
 - Pheromone awareness: `get_pheromones_square()` with visibility=10 in `agent_main()`
 - Pheromone cooldowns: 30 time units for both `need_help` and `area_cleared`
 - `assess_and_act()` is legacy random-movement code, replaced by `agent_main()`
+- CrewAI `memory=True` enabled on the Crew for within-tick short-term memory
 
 ### CrewAI Tools (`src/idk_some_code/agent_tools.py`)
 Six `BaseTool` subclasses (from `crewai.tools`) hold a reference to their parent `Drone` instance: `MoveEastTool`, `MoveWestTool`, `MoveNorthTool`, `MoveSouthTool`, `EmitNeedHelpTool`, `EmitAreaClearedTool`. They are instantiated fresh each tick inside `agent_main()`.
