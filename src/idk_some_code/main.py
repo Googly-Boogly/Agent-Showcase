@@ -47,7 +47,7 @@ def simulate_disaster_response(grid_size: Tuple[int, int], num_drones: int, num_
         for drone in drones:
             drone.agent_main()
 
-            grid.age_pheromones(current_time, 100)
+            grid.age_pheromones(current_time)
 
 
 def generate_start_positions(center: Tuple[int, int], num_positions: int, spread: int) -> List[Tuple[int, int]]:
@@ -122,7 +122,7 @@ def update_visualization(frame, grid, drones, drone_scatter, building_scatter, s
     # Sequential grid updates (cell exploration and pheromone aging)
     for drone in drones:
         drone.explore_current_cell(frame)
-    grid.age_pheromones(frame, 100)
+    grid.age_pheromones(frame)
 
     # Drone positions
     drone_positions = np.array([drone.position for drone in drones])
@@ -167,7 +167,7 @@ def main():
     num_drones = 4
     num_mountains = 50
     num_buildings = 300
-    num_victims = 100
+    num_victims = 300
     grid, drones = initialize_simulation(grid_size, num_drones, num_mountains, num_buildings)
 
     initialize_victims(grid, num_victims)
@@ -177,7 +177,7 @@ def main():
 
     ani = FuncAnimation(fig, update_visualization,
                         fargs=(grid, drones, drone_scatter, building_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter, rescue_scatter),
-                        frames=np.arange(100), blit=False)
+                        frames=np.arange(1), blit=False)
 
     ani.save('files/animation.mp4', writer='ffmpeg', fps=10)
     print("Simulation complete and saved.")

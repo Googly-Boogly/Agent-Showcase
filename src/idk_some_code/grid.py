@@ -59,21 +59,13 @@ class Grid:
             'intensity': intensity
         })
 
-    def pheromone_decay_function(self, intensity: float, age: int, decay_rate: float) -> float:
-        """Calculate the new intensity of a pheromone based on its age and a decay rate."""
-        return intensity * 0.9 ** (age / decay_rate)
-
-    def age_pheromones(self, current_time: int, decay_rate: float = 100) -> None:
-        """Ages pheromones based on the current time, reducing their intensity according to the decay function."""
+    def age_pheromones(self, current_time: int) -> None:
+        """Removes pheromones older than 50 frames."""
         for y in range(self.height):
             for x in range(self.width):
                 self.pheromones[y][x] = [
-                    {**pheromone, 'intensity': self.pheromone_decay_function(pheromone['intensity'],
-                                                                             current_time - pheromone['timestamp'],
-                                                                             decay_rate)}
-                    for pheromone in self.pheromones[y][x] if
-                    self.pheromone_decay_function(pheromone['intensity'], current_time - pheromone['timestamp'],
-                                                  decay_rate) > 0
+                    p for p in self.pheromones[y][x]
+                    if current_time - p['timestamp'] < 50
                 ]
 
     def get_victim_positions(self) -> List[Tuple[int, int]]:

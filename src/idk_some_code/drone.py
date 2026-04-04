@@ -273,8 +273,16 @@ class Drone:
         return ", ".join(parts) if parts else "empty"
 
     def _fmt_pheromones(self, counts: dict) -> str:
-        """Format pheromone counts as clean plain text."""
-        return f"need_help={counts['need_help']}, area_cleared={counts['area_cleared']}"
+        """Format pheromone counts as clean plain text with signal strength."""
+        parts = []
+        for ptype in ("need_help", "area_cleared"):
+            strong = counts[ptype]["strong"]
+            weak = counts[ptype]["weak"]
+            if strong or weak:
+                parts.append(f"{ptype}={strong}strong/{weak}weak")
+            else:
+                parts.append(f"{ptype}=none")
+        return ", ".join(parts)
 
     def emit_need_help_tool(self):
         """Emit the 'Need Help' pheromone to request assistance from other drones."""
@@ -300,18 +308,19 @@ class Drone:
             MoveEastTool(drone=self), MoveWestTool(drone=self), MoveNorthTool(drone=self), MoveSouthTool(drone=self),
             EmitNeedHelpTool(drone=self), EmitAreaClearedTool(drone=self)
         ]
-        # Get all pheromones in the surrounding area
-        all_phers = {"N": {"need_help": 0, "area_cleared": 0}, "S": {"need_help": 0, "area_cleared": 0},
-                     "E": {"need_help": 0, "area_cleared": 0}, "W": {"need_help": 0, "area_cleared": 0},
-                     "NE": {"need_help": 0, "area_cleared": 0}, "NW": {"need_help": 0, "area_cleared": 0},
-                     "SE": {"need_help": 0, "area_cleared": 0}, "SW": {"need_help": 0, "area_cleared": 0}}
+        # Get all pheromones in the surrounding area, bucketed by strength
+        def _empty_counts():
+            return {"need_help": {"strong": 0, "weak": 0}, "area_cleared": {"strong": 0, "weak": 0}}
+
+        all_phers = {sign: _empty_counts() for sign in ["N", "S", "E", "W", "NE", "NW", "SE", "SW"]}
         cardinal_signs = ["N", "S", "E", "W", "NE", "NW", "SE", "SW"]
         for sign in cardinal_signs:
             for pher in nearby_pheromones[sign]:
-                if pher["type"] == "need_help":
-                    all_phers[sign]["need_help"] += 1
-                elif pher["type"] == "area_cleared":
-                    all_phers[sign]["area_cleared"] += 1
+                ptype = pher["type"]
+                if ptype in ("need_help", "area_cleared"):
+                    age = self.time_spent - pher["timestamp"]
+                    strength = "strong" if age < 25 else "weak"
+                    all_phers[sign][ptype][strength] += 1
 
         # Anti-stuck detection
         stuck = self.is_stuck()
