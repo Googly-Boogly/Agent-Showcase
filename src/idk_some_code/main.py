@@ -154,7 +154,7 @@ def update_visualization(frame, grid, drones, drone_scatter, building_scatter, s
     recent_rescues = [
         (x, y) for drone in drones
         for x, y, t in drone.rescue_events
-        if frame - t <= 3
+        if frame - t <= 10
     ]
     rescue_positions = np.array(recent_rescues) if recent_rescues else np.empty((0, 2))
     rescue_scatter.set_offsets(rescue_positions)
@@ -177,9 +177,9 @@ def main():
 
     ani = FuncAnimation(fig, update_visualization,
                         fargs=(grid, drones, drone_scatter, building_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter, rescue_scatter),
-                        frames=np.arange(10), blit=True)
+                        frames=np.arange(100), blit=False)
 
-    ani.save('files/animation.mp4', writer='ffmpeg', fps=30)
+    ani.save('files/animation.mp4', writer='ffmpeg', fps=10)
     print("Simulation complete and saved.")
 
 

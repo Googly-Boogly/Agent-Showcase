@@ -25,7 +25,7 @@ except ImportError:
 
 os.environ["ANTHROPIC_API_KEY"] = State.config["ANTHROPIC_API_KEY"]
 os.environ["OPENAI_API_KEY"] = State.config["OPENAI_API_KEY"]
-os.environ["OPENAI_MODEL_NAME"] = "gpt-5-mini"
+os.environ["OPENAI_MODEL_NAME"] = State.config["OPENAI_MODEL_NAME"]
 
 class Drone:
     def __init__(self, grid: Grid, start_pos: Tuple[int, int], start_time: int = 0) -> None:
@@ -135,7 +135,6 @@ class Drone:
         else:
             print("This drone attempted a dance move it hasn't quite mastered yet.")
         self.update_visited_history(self.position)
-        self.emit_pheromone("trail", "Drone trail", self.time_spent)
 
     def evaluate_area_cleared(self, current_time: int) -> None:
         print(f"Evaluating area cleared at {self.position}, time: {current_time}")
@@ -257,6 +256,26 @@ class Drone:
             return 'emit_area_cleared'
         return 'explore'
 
+    def _fmt_perception(self, p) -> str:
+        """Format a single perception direction as clean plain text (no numpy types or curly braces)."""
+        if p is None:
+            return "out of bounds"
+        parts = []
+        if bool(p['obstacle']):
+            parts.append("obstacle")
+        if bool(p['victim']):
+            parts.append("VICTIM")
+        if bool(p['safe_zone']):
+            parts.append("safe zone")
+        if p['pheromones']:
+            types = [ph['type'] for ph in p['pheromones']]
+            parts.append(f"{len(types)} pheromone(s): {', '.join(types)}")
+        return ", ".join(parts) if parts else "empty"
+
+    def _fmt_pheromones(self, counts: dict) -> str:
+        """Format pheromone counts as clean plain text."""
+        return f"need_help={counts['need_help']}, area_cleared={counts['area_cleared']}"
+
     def emit_need_help_tool(self):
         """Emit the 'Need Help' pheromone to request assistance from other drones."""
         self.emit_pheromone("need_help", "Assistance required", self.time_spent)
@@ -322,25 +341,25 @@ You are a world-renowned drone pilot expert deployed in a disaster-struck area t
 Your Recent Action History (persistent memory):
 {memory_context}
 
-Surrounding Pheromones:
-- North: {all_phers["N"]}
-- South: {all_phers["S"]}
-- East: {all_phers["E"]}
-- West: {all_phers["W"]}
-- Northeast: {all_phers["NE"]}
-- Northwest: {all_phers["NW"]}
-- Southeast: {all_phers["SE"]}
-- Southwest: {all_phers["SW"]}
+Surrounding Pheromones (within 10 cells):
+- North: {self._fmt_pheromones(all_phers["N"])}
+- South: {self._fmt_pheromones(all_phers["S"])}
+- East: {self._fmt_pheromones(all_phers["E"])}
+- West: {self._fmt_pheromones(all_phers["W"])}
+- Northeast: {self._fmt_pheromones(all_phers["NE"])}
+- Northwest: {self._fmt_pheromones(all_phers["NW"])}
+- Southeast: {self._fmt_pheromones(all_phers["SE"])}
+- Southwest: {self._fmt_pheromones(all_phers["SW"])}
 
-Perceptions:
-- North: {self.drone_state['perceptions']['N']}
-- South: {self.drone_state['perceptions']['S']}
-- East: {self.drone_state['perceptions']['E']}
-- West: {self.drone_state['perceptions']['W']}
-- Northeast: {self.drone_state['perceptions']['NE']}
-- Northwest: {self.drone_state['perceptions']['NW']}
-- Southeast: {self.drone_state['perceptions']['SE']}
-- Southwest: {self.drone_state['perceptions']['SW']}
+Adjacent Cell Perceptions:
+- North: {self._fmt_perception(self.drone_state['perceptions']['N'])}
+- South: {self._fmt_perception(self.drone_state['perceptions']['S'])}
+- East: {self._fmt_perception(self.drone_state['perceptions']['E'])}
+- West: {self._fmt_perception(self.drone_state['perceptions']['W'])}
+- Northeast: {self._fmt_perception(self.drone_state['perceptions']['NE'])}
+- Northwest: {self._fmt_perception(self.drone_state['perceptions']['NW'])}
+- Southeast: {self._fmt_perception(self.drone_state['perceptions']['SE'])}
+- Southwest: {self._fmt_perception(self.drone_state['perceptions']['SW'])}
 
 The disaster area is broken up into grid cells with obstacles, victims, and safe zones scattered throughout. The grid measures {self.grid.height}x{self.grid.width}. Your current position: {self.position}.
 {stuck_context}
@@ -363,13 +382,13 @@ When to Move:
 - Path Clearing: Move to explore new areas if the surrounding cells are already marked as safe and there's a potential for undiscovered zones.
 
 When to Emit Pheromones:
-- Need Help: Emit a 'Need Help' pheromone if the drone encounters multiple victims or impassable obstacles and requires assistance from other drones.
-- Area Cleared: Emit an 'Area Cleared' pheromone when a significant surrounding area has been explored and secured, indicating it's safe for ground personnel.
+- Need Help: Emit a 'Need Help' pheromone if the drone encounters multiple victims and requires assistance from other drones.
+- Area Cleared: Emit an 'Area Cleared' pheromone when a significant surrounding area has been explored and secured.
 """,
             verbose=False,
             allow_delegation=False,
             tools=tools,
-            llm="gpt-5-mini",
+            llm="gpt-5-nano",
             max_iter=3,
             max_execution_time=60,
         )
@@ -383,8 +402,11 @@ When to Emit Pheromones:
             tasks=[drone_task],
             verbose=False,
         )
-        result = crew.kickoff()
-        print("*************")
+        try:
+            result = crew.kickoff()
+            print("*************")
+        except TimeoutError:
+            print(f"Drone at {self.position} timed out this tick, skipping.")
 
         # Record action in persistent history
         self.action_history.append(
