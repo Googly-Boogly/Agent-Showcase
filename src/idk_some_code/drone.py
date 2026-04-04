@@ -1,23 +1,31 @@
 # drone.py
 import os
-import time
+import random
 from collections import deque
+from typing import Tuple, Dict, Any, List
 
 import numpy as np
-from typing import Tuple, Dict, Any, Optional
 from crewai import Agent, Task, Crew, Process
-
-
 
 from global_code.singleton import State
 try:
     from idk_some_code.grid import Grid
 except ImportError:
     from grid import Grid
-from langchain_anthropic import ChatAnthropic
+try:
+    from idk_some_code.agent_tools import (
+        MoveEastTool, MoveWestTool, MoveNorthTool, MoveSouthTool,
+        EmitNeedHelpTool, EmitAreaClearedTool
+    )
+except ImportError:
+    from agent_tools import (
+        MoveEastTool, MoveWestTool, MoveNorthTool, MoveSouthTool,
+        EmitNeedHelpTool, EmitAreaClearedTool
+    )
+
 os.environ["ANTHROPIC_API_KEY"] = State.config["ANTHROPIC_API_KEY"]
 os.environ["OPENAI_API_KEY"] = State.config["OPENAI_API_KEY"]
-os.environ["OPENAI_MODEL_NAME"] = "gpt-3.5-turbo-1106"
+os.environ["OPENAI_MODEL_NAME"] = "gpt-5-mini"
 
 class Drone:
     def __init__(self, grid: Grid, start_pos: Tuple[int, int], start_time: int = 0) -> None:
@@ -27,7 +35,8 @@ class Drone:
         self.time_spent = 0
         self.victim_counter = 0
         self.move_counter_since_last_victim = 0
-        self.visited_cells_history = deque(maxlen=4)
+        self.visited_cells_history = deque(maxlen=20)
+        self.action_history: List[str] = []
         self.drone_state: Dict[str, any] = {
             "position": start_pos,
             "perceptions": {
@@ -40,18 +49,38 @@ class Drone:
         self.help_cooldown = 30  # Time units to wait before "Need Help" can be emitted again
         self.area_cleared_cooldown = 30
         self.start_time = start_time
-        self.last_area_cleared_time = 0  # Initialize the last time the 'Area Cleared' was emitted
-        self.area_cleared_cooldown = 30  # Time units to wait before 'Area Cleared' can be emitted again
-        self.ClaudeHaiku = ChatAnthropic(model="claude-3-haiku-20240307")
+        self.last_area_cleared_time = 0
+        self.area_cleared_cooldown = 30
+
+    def is_stuck(self) -> bool:
+        """Detect if the drone is oscillating between the same few cells."""
+        if len(self.visited_cells_history) < 6:
+            return False
+        recent = list(self.visited_cells_history)[-6:]
+        unique_positions = set(recent)
+        return len(unique_positions) <= 2
+
+    def get_unvisited_directions(self) -> List[str]:
+        """Get passable directions leading to cells not recently visited."""
+        x, y = self.position
+        directions = {
+            "North": (x, y - 1), "South": (x, y + 1),
+            "East": (x + 1, y), "West": (x - 1, y)
+        }
+        unvisited = []
+        for name, (nx, ny) in directions.items():
+            if (0 <= nx < self.grid.width and 0 <= ny < self.grid.height
+                    and self.grid.is_passable(nx, ny)
+                    and (nx, ny) not in self.visited_cells_history):
+                unvisited.append(name)
+        return unvisited
 
     def explore_current_cell(self, current_time: int) -> None:
         x, y = self.position
         if self.grid.is_victim(x, y):
             if self.grid.is_obstacle(x, y) and self.grid.obstacles[y][x]['type'] == 'collapsed_building':
-                # print(f"Commencing assistance for victim at collapsed building ({x}, {y}).")
                 self.time_spent += 5  # Time to assist victim
             else:
-                # print(f"Commencing assistance for victim at ({x}, {y}).")
                 self.time_spent += 5  # Time to assist victim
             self.grid.remove_victim(x, y)
             self.grid.add_safe_zone(x, y)
@@ -71,8 +100,6 @@ class Drone:
             if possible_moves:  # If there are any possible moves
                 self.move(np.random.choice(possible_moves))
         self.explore_current_cell(current_time)
-        # self.evaluate_area_cleared(current_time
-        #                            self.grid.c
 
     def can_move(self, direction: str) -> bool:
         """Check if a move in the given direction is possible."""
@@ -104,7 +131,6 @@ class Drone:
             self.position = (self.position[0] + 1, self.position[1])
             self.update_state()
         else:
-            # Let's humorously acknowledge an unsuccessful move
             print("This drone attempted a dance move it hasn't quite mastered yet.")
         self.update_visited_history(self.position)
         self.emit_pheromone("trail", "Drone trail", self.time_spent)
@@ -139,7 +165,6 @@ class Drone:
             self.visited_cells_history.append(new_position)
 
     def evaluate_need_help(self, current_time: int) -> None:
-        # print(f"Evaluating need for help at {current_time}, visited cells: {self.visited_cells_history}")
         print(f"Current Time: {current_time}, Last Help Time: {self.last_help_time}, Cooldown: {self.help_cooldown}")
         if len(set(self.visited_cells_history)) >= self.help_threshold:
             last_emission_time = current_time - self.last_help_time
@@ -209,11 +234,9 @@ class Drone:
         """Emits a specified type of pheromone at the drone's current position."""
         intensity = 1.0  # Default intensity, can be adjusted based on pheromone type or situation
         self.grid.add_pheromone(self.position[0], self.position[1], pheromone_type, message, current_time, intensity)
-        # print(f"Emitting '{pheromone_type}' pheromone at {self.position} with message '{message}'.")
 
     def should_emit_help(self) -> bool:
         """Determines if the 'Need Help' pheromone should be emitted."""
-        # Example logic, can be refined based on other conditions
         return self.move_counter_since_last_victim > self.help_threshold and not self.last_help_time + self.help_cooldown < self.time_spent
 
     def should_emit_area_cleared(self, current_time: int) -> bool:
@@ -256,7 +279,6 @@ class Drone:
             MoveEastTool(drone=self), MoveWestTool(drone=self), MoveNorthTool(drone=self), MoveSouthTool(drone=self),
             EmitNeedHelpTool(drone=self), EmitAreaClearedTool(drone=self)
         ]
-        # tools = [move_north_tool(self), move_south_tool(self), move_east_tool(self), move_west_tool(self), emit_need_help_tool(self), emit_area_cleared_tool(self)]
         # Get all pheromones in the surrounding area
         all_phers = {"N": {"need_help": 0, "area_cleared": 0}, "S": {"need_help": 0, "area_cleared": 0},
                      "E": {"need_help": 0, "area_cleared": 0}, "W": {"need_help": 0, "area_cleared": 0},
@@ -269,8 +291,24 @@ class Drone:
                     all_phers[sign]["need_help"] += 1
                 elif pher["type"] == "area_cleared":
                     all_phers[sign]["area_cleared"] += 1
-                # elif pher["type"] == "trail":
-                #     all_phers[sign]["trail"] += 1
+
+        # Anti-stuck detection
+        stuck = self.is_stuck()
+        unvisited = self.get_unvisited_directions()
+
+        # Build persistent memory context from action history
+        recent_actions = self.action_history[-10:] if self.action_history else ["No previous actions"]
+        memory_context = "\n".join(f"  - {a}" for a in recent_actions)
+
+        stuck_context = ""
+        if stuck:
+            stuck_context = f"""
+CRITICAL WARNING: You are STUCK! You have been oscillating between the same positions repeatedly.
+You MUST move in a NEW direction you haven't visited recently.
+Suggested unvisited directions: {', '.join(unvisited) if unvisited else 'All nearby cells visited - pick the least recently visited direction'}
+"""
+
+        old_position = self.position
 
         # agent code time
         drone_agent = Agent(
@@ -278,6 +316,9 @@ class Drone:
             goal='Decide the best action based on the current situation',
             backstory=f"""
 You are a world-renowned drone pilot expert deployed in a disaster-struck area to assist in search and rescue operations. Your primary goal is to locate and assist victims while ensuring the area's safety. You can communicate with other drones using pheromones to coordinate efforts.
+
+Your Recent Action History (persistent memory):
+{memory_context}
 
 Surrounding Pheromones:
 - North: {all_phers["N"]}
@@ -300,7 +341,7 @@ Perceptions:
 - Southwest: {self.drone_state['perceptions']['SW']}
 
 The disaster area is broken up into grid cells with obstacles, victims, and safe zones scattered throughout. The grid measures {self.grid.height}x{self.grid.width}. Your current position: {self.position}.
-
+{stuck_context}
 Possible Actions:
 - Move: North, South, East, West (if passable)
 - Emit 'Need Help' pheromone (if needed)
@@ -312,6 +353,7 @@ When to emit pheromone:
 - ONLY MOVE ONCE PER TURN. You can emit a pheromone and move though. ONLY MOVE ONCE THAN COMPLETE THIS TASK
 - DONT emit 'Need Help' if you are in a safe zone, or there are multiple other 'Need Help' pheromones nearby
 - Be very selective about when to emit pheromones, as they can attract other drones to your location.
+- PRIORITIZE exploring new areas over revisiting cells you've already been to.
 Example behavior:
 
 When to Move:
@@ -325,10 +367,9 @@ When to Emit Pheromones:
             verbose=False,
             allow_delegation=False,
             tools=tools,
-            # llm="gpt-3.5-turbo-1106", # llm=self.ClaudeHaiku to use haiku
+            llm="gpt-5-mini",
             max_iter=3,
-            max_execution_time=2,
-            memory=True
+            max_execution_time=10,
         )
         drone_task = Task(
             description="""Analyze the current situation and decide the best course of action. ONLY MOVE ONCE PER TURN. You can emit a pheromone and move though. ONLY MOVE ONCE THAN COMPLETE THIS TASK""",
@@ -338,12 +379,24 @@ When to Emit Pheromones:
         crew = Crew(
             agents=[drone_agent],
             tasks=[drone_task],
-            verbose=2,  # You can set it to 1 or 2 to different logging levels
+            verbose=False,
+            memory=True,
         )
         result = crew.kickoff()
         print("*************")
 
-        time.sleep(3)
+        # Record action in persistent history
+        self.action_history.append(
+            f"Tick {self.time_spent}: Was at {old_position}, now at {self.position}"
+        )
+
+        # Anti-stuck fallback: force movement if LLM didn't unstick us
+        if stuck and self.position == old_position and unvisited:
+            direction_map = {"North": "up", "South": "down", "East": "right", "West": "left"}
+            chosen = random.choice(unvisited)
+            print(f"Anti-stuck override: forcing move {chosen}")
+            self.move(direction_map[chosen])
+            self.action_history.append(f"Tick {self.time_spent}: Anti-stuck forced move {chosen} to {self.position}")
 
 
     def move_up(self) -> str:
@@ -373,132 +426,3 @@ When to Emit Pheromones:
             return "IMPASSABLE"
         self.move("right")
         return "Moved to the east"
-
-
-# Cheap fix to get around circular imports
-from crewai_tools import BaseTool
-from crewai_tools import tool
-from pydantic import BaseModel, BaseConfig, Field
-
-
-class DroneModel(BaseModel):
-    class Config:
-        arbitrary_types_allowed = True
-
-
-# @tool("MoveEastTool")
-# def move_east_tool(drone: DroneModel) -> str:
-#     """Move the drone east."""
-#     drone.move_right()  # Assuming move_right() is a valid method on the Drone class
-#     return "Moved east"
-#
-#
-# @tool("MoveWestTool")
-# def move_west_tool(drone: Any):
-#     """Move the drone west."""
-#     drone.move_left()
-#     return "Moved West"
-#
-#
-# @tool("MoveNorthTool")
-# def move_north_tool(drone: Any):
-#     """Move the drone north."""
-#     drone.move_up()
-#     return "Moved north"
-#
-#
-# @tool("MoveSouthTool")
-# def move_south_tool(drone: Any):
-#     """Move the drone south."""
-#     drone.move_down()
-#     return "Moved south"
-#
-#
-# @tool("EmitNeedHelpTool")
-# def emit_need_help_tool(drone: Any):
-#     """Emit the 'Need Help' pheromone."""
-#     drone.emit_need_help_tool()
-#     return "Emitted 'Need Help'"
-#
-#
-# @tool("EmitAreaClearedTool")
-# def emit_area_cleared_tool(drone: any):
-#     """Emit the 'Area Cleared' pheromone."""
-#     drone.emit_area_cleared_tool()
-#     return "Emitted 'Area Cleared'"
-
-
-class MoveEastTool(BaseTool):
-    name: str = "Move East"
-    description: str = "Tool to move the drone east."
-    drone: Any = Field(..., description="Drone instance")
-
-    def __init__(self, drone):
-        super().__init__(drone=drone)
-        # self.drone = drone
-
-    def _run(self):
-        result = self.drone.move_right()
-        return result
-
-
-class MoveWestTool(BaseTool):
-    name: str = "Move West"
-    description: str = "Tool to move the drone west."
-    drone: Any = Field(..., description="Drone instance")
-
-    def __init__(self, drone):
-        super().__init__(drone=drone)
-
-    def _run(self):
-        result = self.drone.move_left()
-        return result
-
-
-class MoveNorthTool(BaseTool):
-    name: str = "Move North"
-    description: str = "Tool to move the drone north."
-    drone: Any = Field(..., description="Drone instance")
-
-    def __init__(self, drone):
-        super().__init__(drone=drone)
-
-    def _run(self):
-        return self.drone.move_up()
-
-
-
-class MoveSouthTool(BaseTool):
-    name: str = "Move South"
-    description: str = "Tool to move the drone south."
-    drone: Any = Field(..., description="Drone instance")
-
-    def __init__(self, drone):
-        super().__init__(drone=drone)
-
-    def _run(self):
-        return self.drone.move_down()
-
-
-class EmitNeedHelpTool(BaseTool):
-    name: str = "Emit Need Help"
-    description: str = "Tool to emit 'Need Help' pheromone."
-    drone: Any = Field(..., description="Drone instance")
-
-    def __init__(self, drone):
-        super().__init__(drone=drone)
-
-    def _run(self):
-        return self.drone.emit_need_help_tool()
-
-
-class EmitAreaClearedTool(BaseTool):
-    name: str = "Emit Area Cleared"
-    description: str = "Tool to emit 'Area Cleared' pheromone."
-    drone: Any = Field(..., description="Drone instance")
-
-    def __init__(self, drone):
-        super().__init__(drone=drone)
-
-    def _run(self):
-        return self.drone.emit_area_cleared_tool()

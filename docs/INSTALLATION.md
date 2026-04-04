@@ -11,10 +11,10 @@ Create `config.yaml` in the project root before running:
 ```yaml
 ANTHROPIC_API_KEY: your_anthropic_key_here
 OPENAI_API_KEY: your_openai_key_here
-OPENAI_MODEL_NAME: gpt-3.5-turbo-1106
+OPENAI_MODEL_NAME: gpt-5-mini
 ```
 
-This file is git-ignored and must be created manually. The simulation will fail at import time if it is missing.
+This file is git-ignored and must be created manually. The simulation will fail at import time if it is missing — `singleton.py` loads it eagerly, not lazily.
 
 ## Docker (recommended)
 
@@ -54,3 +54,19 @@ The Docker image installs FFmpeg and all Python dependencies automatically. Outp
    ```bash
    pytest src/tests/
    ```
+
+## Switching the LLM
+
+The drone LLM is set in `src/idk_some_code/drone.py` in `agent_main()`:
+
+```python
+drone_agent = Agent(
+    ...
+    llm="gpt-5-mini",  # Change this
+)
+```
+
+Any model string supported by CrewAI's LiteLLM backend works here, e.g.:
+- `"gpt-4o"` — OpenAI GPT-4o
+- `"anthropic/claude-3-haiku-20240307"` — Claude Haiku
+- `"ollama/llama3.2"` — local Ollama model

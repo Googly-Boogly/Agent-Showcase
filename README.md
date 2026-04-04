@@ -1,13 +1,17 @@
 # Disaster Recovery Drone Simulation
 
-An AI-powered drone swarm simulation built with **CrewAI** and **Claude/GPT** LLMs. Autonomous drone agents coordinate search-and-rescue operations across a 100×100 grid using emergent pheromone-based communication — no direct drone-to-drone messaging.
+An AI-powered drone swarm simulation built with **CrewAI 1.13.0** and **gpt-5-mini**. Autonomous drone agents coordinate search-and-rescue operations across a 100×100 grid using emergent pheromone-based communication — no direct drone-to-drone messaging.
 
 ## How It Works
 
-Each drone is a CrewAI agent. Every simulation tick, a drone:
-1. **Perceives** — reads the 8 adjacent cells (obstacles, victims, safe zones) and scans pheromone counts in a 10-cell radius around itself
-2. **Decides** — the LLM receives a dynamic prompt containing the drone's perceptions and nearby pheromone counts, then chooses one movement action and optionally emits a pheromone
-3. **Acts** — moves to the target cell, then explores it (rescuing victims or surveying collapsed buildings)
+Each drone is a CrewAI agent. Every simulation tick, all drones run **in parallel**:
+
+1. **Perceives** — reads the 8 adjacent cells (obstacles, victims, safe zones) and scans pheromone counts in a 10-cell radius
+2. **Remembers** — the last 10 actions from `action_history` are injected into the LLM prompt for cross-tick continuity
+3. **Decides** — the LLM receives a dynamic prompt with perceptions, nearby pheromone counts, and memory, then chooses one movement action and optionally emits a pheromone
+4. **Acts** — moves to the target cell, then explores it (rescuing victims or surveying collapsed buildings)
+
+If a drone gets stuck oscillating between the same cells, it receives a `CRITICAL WARNING` in its prompt with suggested unvisited directions. If the LLM still doesn't escape, a hard override forces movement to an unvisited cell.
 
 Pheromones decay exponentially over time (`intensity * 0.9^(age/decay_rate)`), so signals from long ago fade naturally without cleanup logic.
 
@@ -41,40 +45,31 @@ The simulation produces `files/animation.mp4`:
 
 ## Setup
 
-### Prerequisites
+See [docs/INSTALLATION.md](docs/INSTALLATION.md) for full setup instructions.
 
-- Docker and Docker Compose, **or** Python 3.11+ with FFmpeg installed
+### Quick Start
 
-### Configuration
+1. Create `config.yaml` in the project root:
+   ```yaml
+   ANTHROPIC_API_KEY: your_anthropic_key_here
+   OPENAI_API_KEY: your_openai_key_here
+   OPENAI_MODEL_NAME: gpt-5-mini
+   ```
 
-Create `config.yaml` in the project root (this file is git-ignored):
+2. Run with Docker:
+   ```bash
+   docker-compose up --build
+   ```
 
-```yaml
-ANTHROPIC_API_KEY: your_anthropic_key_here
-OPENAI_API_KEY: your_openai_key_here
-OPENAI_MODEL_NAME: gpt-3.5-turbo-1106
-```
-
-The LLM used by each drone defaults to `gpt-3.5-turbo-1106`. To switch to Claude Haiku, change the `llm` parameter in `drone.py:agent_main()`.
-
-### Run with Docker (recommended)
-
-```bash
-docker-compose up --build
-```
-
-### Run manually
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python src/idk_some_code/main.py
-```
+   Or manually:
+   ```bash
+   pip install -r requirements.txt
+   python src/idk_some_code/main.py
+   ```
 
 Output is saved to `files/animation.mp4`.
 
-### Run tests
+### Run Tests
 
 ```bash
 # Docker
@@ -91,7 +86,7 @@ All hardcoded in `src/idk_some_code/main.py:main()`:
 | Parameter | Value |
 |-----------|-------|
 | Grid size | 100 × 100 |
-| Drones | 4 (start clustered near center) |
+| Drones | 4 (start clustered near center, run in parallel) |
 | Victims | 300 |
 | Collapsed buildings | 500 |
 | Mountains | 50 |
@@ -103,13 +98,24 @@ All hardcoded in `src/idk_some_code/main.py:main()`:
 ```
 src/
 ├── idk_some_code/
-│   ├── main.py          # Entry point, visualization, simulation loop
-│   ├── drone.py         # Drone agent + CrewAI tools
+│   ├── main.py          # Entry point, FuncAnimation loop, parallel execution
+│   ├── drone.py         # Drone agent: perception, memory, anti-stuck logic
+│   ├── agent_tools.py   # CrewAI BaseTool subclasses (6 tools)
 │   └── grid.py          # Environment model and pheromone system
 └── global_code/
-    ├── singleton.py     # Config loader (reads config.yaml)
-    └── helpful_functions.py
+    ├── singleton.py     # Config loader (reads config.yaml at import time)
+    └── helpful_functions.py  # load_config, logging utilities
+docs/
+├── ARCHITECTURE.md      # Detailed architecture and data flow
+├── INSTALLATION.md      # Setup and LLM configuration guide
+└── PHEROMONES.md        # Pheromone system internals
 ```
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — execution flow, data structures, thread safety
+- [Pheromones](docs/PHEROMONES.md) — pheromone types, decay, emergent coordination
+- [Installation](docs/INSTALLATION.md) — setup, LLM switching
 
 ## License
 

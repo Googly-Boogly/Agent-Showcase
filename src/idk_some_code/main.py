@@ -4,13 +4,13 @@ import sys
 sys.path.append('/src')
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 from typing import List, Tuple
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from crewai import Agent, Task, Crew, Process
-from langchain_anthropic import ChatAnthropic
+
 try:
     from global_code.singleton import State
 except ImportError:
@@ -45,13 +45,9 @@ def simulate_disaster_response(grid_size: Tuple[int, int], num_drones: int, num_
 
     for current_time in range(simulation_time):
         for drone in drones:
-            # Example simple behavior: Move randomly, then assess and act.
-            drone.agent_main()  # Call the agent_main function to decide and act
+            drone.agent_main()
 
-            # Example of aging pheromones at a fixed rate, assuming a decay rate of 100 time units
             grid.age_pheromones(current_time, 100)
-
-        # Optional: Add a call to a visualization function here to see the grid state
 
 
 def generate_start_positions(center: Tuple[int, int], num_positions: int, spread: int) -> List[Tuple[int, int]]:
@@ -115,10 +111,16 @@ def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, 
                          area_cleared_scatter):
     """Update function for the animation, refreshing drone positions, safe zones, and pheromones."""
 
-    # Simulate drone actions and update positions
+    # Parallel drone decision-making via LLM
+    with ThreadPoolExecutor(max_workers=len(drones)) as executor:
+        futures = [executor.submit(drone.agent_main) for drone in drones]
+        for future in futures:
+            future.result()  # Wait for all drones to complete
+
+    # Sequential grid updates (cell exploration and pheromone aging)
     for drone in drones:
-        # drone.assess_and_act(frame)  # Assuming this method updates the drone's position
-        drone.agent_main()
+        drone.explore_current_cell(frame)
+    grid.age_pheromones(frame, 100)
 
     # Update drone positions on the plot
     drone_positions = np.array([drone.position for drone in drones])
@@ -136,8 +138,6 @@ def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, 
         if any(pheromone['type'] == 'need_help' for pheromone in grid.get_pheromones(x, y))
     ])
     if need_help_positions.size > 0:
-        # Need help pheromone emitted
-        # print('hello')
         need_help_scatter.set_offsets(need_help_positions)
     else:
         need_help_scatter.set_offsets(np.empty((0, 2)))
@@ -148,12 +148,9 @@ def update_visualization(frame, grid, drones, drone_scatter, safe_zone_scatter, 
         if any(pheromone['type'] == 'area_cleared' for pheromone in grid.get_pheromones(x, y))
     ])
     if area_cleared_positions.size > 0:
-        # print("area cleared pheromone emitted at: ", area_cleared_positions, "at time: ", frame)
         area_cleared_scatter.set_offsets(area_cleared_positions)
     else:
         area_cleared_scatter.set_offsets(np.empty((0, 2)))
-
-    # Don't forget to refresh or update other elements like safe zones if they change over time
 
     return drone_scatter, safe_zone_scatter, need_help_scatter, area_cleared_scatter
 
@@ -179,37 +176,6 @@ def main():
     print("Simulation complete and saved.")
 
 
-def refined_static_victim_visualization_test():
-    grid_size = (100, 100)
-    num_victims = 10  # Adjust based on your setup
-    grid = Grid(*grid_size)
-
-    # Initialize victims on the grid
-    initialize_victims(grid, num_victims)
-
-    # Fetch initial victim positions
-    initial_victim_positions = np.array(grid.get_victim_positions())
-    print("Refined test - Initial victim positions:", initial_victim_positions)
-
-    # Ensure the data format is correct for Matplotlib
-    if initial_victim_positions.size > 0:
-        x_positions, y_positions = initial_victim_positions[:, 0], initial_victim_positions[:, 1]
-    else:
-        x_positions, y_positions = [], []
-
-    fig, ax = plt.subplots()
-    ax.set_xlim(0, grid_size[0])
-    ax.set_ylim(0, grid_size[1])
-    ax.set_facecolor('black')
-
-    # Increase size and adjust color for visibility
-    ax.scatter(x_positions, y_positions, s=100, color='cyan', label='Victims')  # Using 'cyan' for better visibility
-
-    plt.legend()
-
-    plt.savefig('files/plot.png')
-
-
 def initialize_obstacles(grid: Grid, num_mountains: int, num_buildings: int) -> None:
     """Randomly place mountains and collapsed buildings on the grid."""
     # Add mountains
@@ -226,28 +192,4 @@ def initialize_obstacles(grid: Grid, num_mountains: int, num_buildings: int) -> 
 
 
 if __name__ == "__main__":
-    # ClaudeHaiku = ChatAnthropic(model="claude-3-haiku-20240307")
-    # drone_agent = Agent(
-    #     role='Drone in a disaster recovery mission',
-    #     goal='Decide the best action based on the current situation',
-    #     backstory=f"""
-    # You are a world-renowned drone pilot expert deployed in a disaster-struck area to assist in search and rescue operations. Your primary goal is to locate and assist victims while ensuring the area's safety. You can communicate with other drones using pheromones to coordinate efforts.
-    # """,
-    #     verbose=True,
-    #     allow_delegation=False,
-    #     tools=[],
-    #     llm=ClaudeHaiku
-    # )
-    # drone_task = Task(
-    #     description="""Decide the best action based on the current situation""",
-    #     expected_output="Either emit a pheromone and move or just move",
-    #     agent=drone_agent
-    # )
-    # crew = Crew(
-    #     agents=[drone_agent],
-    #     tasks=[drone_task],
-    #     verbose=2,  # You can set it to 1 or 2 to different logging levels
-    # )
-    # result = crew.kickoff()
-    # print(result)
     main()

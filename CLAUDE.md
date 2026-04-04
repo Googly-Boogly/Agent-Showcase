@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A disaster recovery drone swarm simulation showcasing agentic behaviors. Autonomous drones navigate a 100x100 grid environment, coordinating via pheromone-based communication (not direct messaging) to locate and assist victims. Built on **CrewAI** and **Claude AI (Anthropic)**.
+A disaster recovery drone swarm simulation showcasing agentic behaviors. Autonomous drones navigate a 100x100 grid environment, coordinating via pheromone-based communication (not direct messaging) to locate and assist victims. Built on **CrewAI 1.13.0** and **OpenAI (gpt-5-mini)**.
 
 ## Commands
 
@@ -45,7 +45,7 @@ Create `config.yaml` in the project root:
 ```yaml
 ANTHROPIC_API_KEY: your_key_here
 OPENAI_API_KEY: your_key_here
-OPENAI_MODEL_NAME: gpt-3.5-turbo-1106
+OPENAI_MODEL_NAME: gpt-5-mini
 ```
 
 This is loaded by `src/global_code/singleton.py` (`State` singleton) and injected into environment variables at startup.
@@ -53,7 +53,10 @@ This is loaded by `src/global_code/singleton.py` (`State` singleton) and injecte
 ## Architecture
 
 ### Simulation Flow (`src/idk_some_code/main.py`)
-The main loop is driven by `matplotlib.animation.FuncAnimation` (300 frames). Each frame calls `update_visualization()`, which calls `drone.agent_main()` for each drone. `explore_current_cell()` is called inside `agent_main()` implicitly through the drone's action; pheromone aging is handled per tick.
+The main loop is driven by `matplotlib.animation.FuncAnimation` (300 frames). Each frame calls `update_visualization()`, which:
+1. Runs `drone.agent_main()` for all drones **in parallel** via `ThreadPoolExecutor` (LLM decision + movement)
+2. Calls `drone.explore_current_cell(frame)` sequentially for each drone (victim rescue / building exploration)
+3. Calls `grid.age_pheromones(frame)` to decay pheromone intensities
 
 Output: `files/animation.mp4` (30 fps via FFmpeg)
 
@@ -67,16 +70,19 @@ Output: `files/animation.mp4` (30 fps via FFmpeg)
 - `get_pheromones_square(position, visibility=10)` returns pheromones bucketed by relative cardinal direction
 
 ### Drone Agent (`src/idk_some_code/drone.py`)
-- `agent_main()` creates a **new CrewAI Agent + Task + Crew per timestep** — there is no persistent agent state between ticks
-- **Current LLM**: `gpt-3.5-turbo-1106` (the `llm=self.ClaudeHaiku` line is commented out). To switch, set the `llm` param in `agent_main()`.
-- `max_iter=3`, `max_execution_time=2`, plus a hard `time.sleep(3)` after each crew kickoff — each drone takes ~5+ seconds per tick
+- `agent_main()` creates a **new CrewAI Agent + Task + Crew per timestep** — no persistent CrewAI agent state between ticks
+- **Current LLM**: `gpt-5-mini` — set via `llm="gpt-5-mini"` in the Agent constructor
+- `max_iter=3`, `max_execution_time=10` — no artificial sleep delay
+- **Persistent memory**: `action_history` list records what the drone did each tick; last 10 entries are injected into the LLM prompt for cross-tick continuity
+- **Anti-stuck logic**: `is_stuck()` detects oscillation (same 2 cells in last 6 moves); `get_unvisited_directions()` suggests new paths; if the LLM fails to unstick, a hard override forces movement to an unvisited cell
 - `drone_state['perceptions']`: adjacent cells only (visibility=1), updated by `update_perceptions()`
 - Pheromone awareness: `get_pheromones_square()` with visibility=10 in `agent_main()`
 - Pheromone cooldowns: 30 time units for both `need_help` and `area_cleared`
 - `assess_and_act()` is legacy random-movement code, replaced by `agent_main()`
+- CrewAI `memory=True` enabled on the Crew for within-tick short-term memory
 
-### CrewAI Tools (defined at bottom of `drone.py`)
-Six `BaseTool` subclasses hold a reference to their parent `Drone` instance: `MoveEastTool`, `MoveWestTool`, `MoveNorthTool`, `MoveSouthTool`, `EmitNeedHelpTool`, `EmitAreaClearedTool`. They are instantiated fresh each tick inside `agent_main()`.
+### CrewAI Tools (`src/idk_some_code/agent_tools.py`)
+Six `BaseTool` subclasses (from `crewai.tools`) hold a reference to their parent `Drone` instance: `MoveEastTool`, `MoveWestTool`, `MoveNorthTool`, `MoveSouthTool`, `EmitNeedHelpTool`, `EmitAreaClearedTool`. They are instantiated fresh each tick inside `agent_main()`.
 
 ### Key Design Pattern
 Drones coordinate **emergently** through pheromones on the grid — there is no direct drone-to-drone messaging. The LLM reads pheromone context in its prompt and decides how to respond.
@@ -85,8 +91,8 @@ Drones coordinate **emergently** through pheromones on the grid — there is no 
 
 - Grid indexing is `[y][x]` everywhere — mixing this up causes silent out-of-bounds bugs
 - The `simulate_disaster_response()` function in `main.py` is unused; actual execution goes through `FuncAnimation` → `update_visualization()`
-- `time.sleep(3)` in `drone.py:agent_main()` makes real-time simulation very slow; remove or reduce it for faster iteration during development
 - `config.yaml` must exist before import — `singleton.py` loads it at module import time, not lazily
+- Drone `agent_main()` runs in parallel via threads — grid writes (pheromone append) are safe under Python's GIL, but avoid adding non-thread-safe grid mutations
 
 ## Simulation Parameters (hardcoded in `main.py:main()`)
 - Grid: 100×100

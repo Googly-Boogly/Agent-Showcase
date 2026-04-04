@@ -6,10 +6,13 @@ docker-compose.prod.yml
 docker-compose.prod.websitebuilder.yml
 docker-compose.withspeech.yml
 docker-compose.nospeech.yml
-
+.claude
+/.claude
 docker-compose.test.yml
 docker-compose.onlycode.yml
 .secrets
+config.yaml
+.env
 .src/secrets
 google_oauth_2_details.json
 src/secrets/token.pickle
