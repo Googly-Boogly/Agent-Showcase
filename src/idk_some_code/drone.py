@@ -37,6 +37,7 @@ class Drone:
         self.move_counter_since_last_victim = 0
         self.visited_cells_history = deque(maxlen=20)
         self.action_history: List[str] = []
+        self.rescue_events: List[Tuple[int, int, int]] = []  # (x, y, frame)
         self.drone_state: Dict[str, any] = {
             "position": start_pos,
             "perceptions": {
@@ -84,6 +85,7 @@ class Drone:
                 self.time_spent += 5  # Time to assist victim
             self.grid.remove_victim(x, y)
             self.grid.add_safe_zone(x, y)
+            self.rescue_events.append((x, y, current_time))
             self.last_action_time = current_time + 5  # Drone will not perform an action for the next 5 turns
         elif self.grid.is_obstacle(x, y) and self.grid.obstacles[y][x]['type'] == 'collapsed_building':
             self.time_spent += 3  # Additional time to explore collapsed building
@@ -369,7 +371,7 @@ When to Emit Pheromones:
             tools=tools,
             llm="gpt-5-mini",
             max_iter=3,
-            max_execution_time=10,
+            max_execution_time=60,
         )
         drone_task = Task(
             description="""Analyze the current situation and decide the best course of action. ONLY MOVE ONCE PER TURN. You can emit a pheromone and move though. ONLY MOVE ONCE THAN COMPLETE THIS TASK""",
@@ -380,7 +382,6 @@ When to Emit Pheromones:
             agents=[drone_agent],
             tasks=[drone_task],
             verbose=False,
-            memory=True,
         )
         result = crew.kickoff()
         print("*************")
